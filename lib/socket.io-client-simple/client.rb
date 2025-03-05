@@ -2,7 +2,7 @@ module SocketIO
   module Client
     module Simple
 
-      def self.connect(url, opts={})
+      def self.connect(url, opts = {})
         client = Client.new(url, opts)
         client.connect
         return client
@@ -13,9 +13,9 @@ module SocketIO
         alias_method :__emit, :emit
 
         attr_accessor :auto_reconnection, :websocket, :url, :reconnecting, :state,
-                      :session_id, :ping_interval, :ping_timeout, :last_pong_at, :last_ping_at
+          :session_id, :ping_interval, :ping_timeout, :last_pong_at, :last_ping_at
 
-        def initialize(url, opts={})
+        def initialize(url, opts = {})
           @url = url
           @opts = opts
           @opts[:transport] = :websocket
@@ -27,12 +27,12 @@ module SocketIO
             loop do
               if @websocket
                 if @state == :connect
-                  if Time.now.to_i - @last_ping_at > @ping_interval/1000
-                    @websocket.send "2"  ## ping
+                  if Time.now.to_i - @last_ping_at > @ping_interval / 1000
+                    @websocket.send "2" ## ping
                     @last_ping_at = Time.now.to_i
                   end
                 end
-                if @websocket.open? and Time.now.to_i - @last_pong_at > @ping_timeout/1000
+                if @websocket.open? and Time.now.to_i - @last_pong_at > @ping_timeout / 1000
                   @websocket.close
                   @state = :disconnect
                   __emit :disconnect
@@ -45,12 +45,13 @@ module SocketIO
 
         end
 
-
         def connect
-          query = @opts.map{|k,v| URI.encode "#{k}=#{v}" }.join '&'
+          query = @opts.map { |k, v| "#{ERB::Util.url_encode(k.to_s)}=#{ERB::Util.url_encode(v.to_s)}" }.join('&')
+          p [:connect, "#{@url}/socket.io/?#{query}", @opts]
           begin
             @websocket = WebSocket::Client::Simple.connect "#{@url}/socket.io/?#{query}"
           rescue Errno::ECONNREFUSED => e
+            p e.inspect
             @state = :disconnect
             @reconnecting = false
             reconnect
@@ -61,6 +62,7 @@ module SocketIO
           this = self
 
           @websocket.on :error do |err|
+            p err
             if err.kind_of? Errno::ECONNRESET and this.state == :connect
               this.state = :disconnect
               this.__emit :disconnect
@@ -75,26 +77,26 @@ module SocketIO
             code, body = msg.data.scan(/^(\d+)(.*)$/)[0]
             code = code.to_i
             case code
-            when 0  ##  socket.io connect
-              body = JSON.parse body rescue next
-              this.session_id = body["sid"] || "no_sid"
-              this.ping_interval = body["pingInterval"] || 25000
-              this.ping_timeout  = body["pingTimeout"]  || 60000
-              this.last_ping_at = Time.now.to_i
-              this.last_pong_at = Time.now.to_i
-              this.state = :connect
-              this.__emit :connect
-            when 3  ## pong
-              this.last_pong_at = Time.now.to_i
-            when 41  ## disconnect from server
-              this.websocket.close if this.websocket.open?
-              this.state = :disconnect
-              this.__emit :disconnect
-              reconnect
-            when 42  ## data
-              data = JSON.parse body rescue next
-              event_name = data.shift
-              this.__emit event_name, *data
+              when 0 ##  socket.io connect
+                body = JSON.parse body rescue next
+                this.session_id = body["sid"] || "no_sid"
+                this.ping_interval = body["pingInterval"] || 25000
+                this.ping_timeout = body["pingTimeout"] || 60000
+                this.last_ping_at = Time.now.to_i
+                this.last_pong_at = Time.now.to_i
+                this.state = :connect
+                this.__emit :connect
+              when 3 ## pong
+                this.last_pong_at = Time.now.to_i
+              when 41 ## disconnect from server
+                this.websocket.close if this.websocket.open?
+                this.state = :disconnect
+                this.__emit :disconnect
+                reconnect
+              when 42 ## data
+                data = JSON.parse body rescue next
+                event_name = data.shift
+                this.__emit event_name, *data
             end
           end
 

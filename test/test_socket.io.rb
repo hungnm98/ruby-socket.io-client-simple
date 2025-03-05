@@ -1,12 +1,13 @@
 require File.expand_path 'test_helper', File.dirname(__FILE__)
 
-class TestSocketIOClientSimple < MiniTest::Test
+class TestSocketIOClientSimple < Minitest::Test
 
   TestServer.start
 
   sleep 1
 
   def test_connect
+    p TestServer.url
     socket = SocketIO::Client::Simple.connect TestServer.url
     result = false
     socket.on :connect do
